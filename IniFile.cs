@@ -1,4 +1,4 @@
-﻿// Rampastring's INI parser
+// Rampastring's INI parser
 // http://www.moddb.com/members/rampastring
 
 using System;
@@ -262,12 +262,57 @@ public class IniFile : IIniFile
         string basedOn = GetStringValue("INISystem", "BasedOn", String.Empty);
         if (!String.IsNullOrEmpty(basedOn))
         {
-            // Consolidate with the INI file that this INI file is based on
             string path = SafePath.CombineFilePath(SafePath.GetFileDirectoryName(FileName), basedOn);
             IniFile baseIni = new IniFile(path);
             ConsolidateIniFiles(baseIni, this);
             Sections = baseIni.Sections;
         }
+
+        ApplyIncludeIni();
+    }
+
+    protected virtual void ApplyIncludeIni()
+    {
+        List<string> includeKeys = GetSectionKeys("$Include");
+        if (includeKeys == null || includeKeys.Count == 0)
+            return;
+
+        foreach (string key in includeKeys)
+        {
+            string includePath = GetStringValue("$Include", key, String.Empty);
+            if (String.IsNullOrEmpty(includePath))
+                continue;
+
+            string fullPath = ResolveIncludePath(includePath);
+            FileInfo includeFile = SafePath.GetFile(fullPath);
+
+            if (!includeFile.Exists)
+            {
+                Logger.Log($"{FileName}: $Include file not found! {includeFile.FullName}");
+                continue;
+            }
+
+            IniFile includeIni = CreateIncludeIniFile(includeFile.FullName);
+            ConsolidateIniFiles(this, includeIni);
+        }
+    }
+
+    /// <summary>
+    /// Resolves an include path relative to the current INI file's directory.
+    /// Derived classes can override this to support custom path variables.
+    /// </summary>
+    protected virtual string ResolveIncludePath(string includePath)
+    {
+        return SafePath.CombineFilePath(SafePath.GetFileDirectoryName(FileName), includePath);
+    }
+
+    /// <summary>
+    /// Creates an IniFile instance for an included INI file.
+    /// Derived classes can override this to return a derived IniFile type.
+    /// </summary>
+    protected virtual IniFile CreateIncludeIniFile(string path)
+    {
+        return new IniFile(path);
     }
 
     /// <summary>
